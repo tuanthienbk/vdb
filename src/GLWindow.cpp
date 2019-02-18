@@ -1,3 +1,5 @@
+#include "GLWindow.h"
+
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Slider.H>
@@ -5,7 +7,7 @@
 #include <FL/Fl_Gl_Window.H>
 #include <FL/gl.h>
 #include <FL/glu.h>
-#include "GLWindow.h"
+
 #include "trackball.h"
 #include "SocketManager.h"
 #include <math.h>
@@ -31,16 +33,19 @@ GLWindow::GLWindow(int X,int Y,int W,int H) : Fl_Gl_Window(X,Y,W,H,NULL) {
 	shapeSize = 7.0f; // max radius of of objects
 	
 	point_size = 5.0;
+	font_size = 10;
 	filter_value = 1.0;
-	
+	should_show_text = true;
+	is_2d = true;
+
 	frame = Frame_init();
 	SocketManager_init(line_callback,this);
     end();
 }
 
-static int readFloats(int n, const char * buf, float * data) {
-	for(int i = 0; i < n; i++) {
-		char * next;
+static int readFloats(int n, const char * buf, float * data, char** rem) {
+	char * next = NULL;
+	for(int i = 0; i < n; i++) {		
 		data[i] = strtod(buf, &next);
 		if(next == buf) {
 			printf("warning invalid float input: %s, setting to 0\n",buf);
@@ -48,6 +53,7 @@ static int readFloats(int n, const char * buf, float * data) {
 		}
 		buf = next;
 	}
+	*rem = next + 1;
 	return 1;
 }
 
@@ -55,31 +61,30 @@ void GLWindow::updateProjection() {
 	GLdouble ratio, radians, wd2;
 	GLdouble left, right, top, bottom, near_, far_;
 
-    
 	// set projection
-	glMatrixMode (GL_PROJECTION);
-	glLoadIdentity ();
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
 	//near = -camera.viewPos.z - shapeSize * 0.5;
-	near_ = 0.001;
+	near_ = 0.000001;
 	far_ = 100; //-camera.viewPos.z + shapeSize * 0.5;
-	if (far_ < 1.0)
-		far_ = 1.0;
 	
 	radians = 0.0174532925 * camera.aperture / 2; // half aperture degrees to radians 
 	wd2 = near_ * tan(radians);
-	ratio = camera.viewWidth / (float) camera.viewHeight;
+	ratio = camera.viewWidth / (float)camera.viewHeight;
 	if (ratio >= 1.0) {
-		left  = -ratio * wd2;
+		left = -ratio * wd2;
 		right = ratio * wd2;
 		top = wd2;
-		bottom = -wd2;	
-	} else {
-		left  = -wd2;
+		bottom = -wd2;
+	}
+	else {
+		left = -wd2;
 		right = wd2;
 		top = wd2 / ratio;
-		bottom = -wd2 / ratio;	
+		bottom = -wd2 / ratio;
 	}
-	glFrustum (left, right, bottom, top, near_, far_);
+	glFrustum(left, right, bottom, top, near_, far_);
+
 }
 
 void GLWindow::updateModelView() {
@@ -87,12 +92,14 @@ void GLWindow::updateModelView() {
 	// move view
 	glMatrixMode (GL_MODELVIEW);
 	glLoadIdentity ();
+
 	gluLookAt (camera.viewPos.x, camera.viewPos.y, camera.viewPos.z,
 			   camera.viewPos.x + camera.viewDir.x,
 			   camera.viewPos.y + camera.viewDir.y,
 			   camera.viewPos.z + camera.viewDir.z,
 			   camera.viewUp.x, camera.viewUp.y ,camera.viewUp.z);
-			
+
+		
 	// if we have trackball rotation to map (this IS the test I want as it can be explicitly 0.0f)
 	if (gTrackingView && gTrackBallRotation[0] != 0.0f) 
 		glRotatef (gTrackBallRotation[0], gTrackBallRotation[1], gTrackBallRotation[2], gTrackBallRotation[3]);
@@ -129,7 +136,7 @@ void GLWindow::mouseDolly(int x, int y) {
 
 void GLWindow::mousePan(int x, int y) {
 	GLfloat panX = (gDollyPanStartPoint[0] - x) / (900.0f / -camera.viewPos.z);
-	GLfloat panY = (gDollyPanStartPoint[1] - y) / (900.0f / -camera.viewPos.z);
+	GLfloat panY = (gDollyPanStartPoint[1] - y) / (900.0f / camera.viewPos.z);
 	camera.viewPos.x -= panX;
 	camera.viewPos.y -= panY;
 	gDollyPanStartPoint[0] = x;
@@ -142,10 +149,10 @@ void GLWindow::resetCamera() {
 
    camera.viewPos.x = 0.0;
    camera.viewPos.y = 0.0;
-   camera.viewPos.z = -10.0;
+   camera.viewPos.z = 10.0;
    camera.viewDir.x = 0; 
    camera.viewDir.y = 0; 
-   camera.viewDir.z = 1;
+   camera.viewDir.z = -1;
 
    camera.viewUp.x = 0;  
    camera.viewUp.y = 1; 
@@ -160,7 +167,21 @@ void GLWindow::interactive_clear() {
     Frame_clear(frame, true);
     label_table.clear();
     refresh_legend();
+	display_texts.clear();
     redraw();
+}
+
+void GLWindow::interactive_show_text()
+{
+	should_show_text = !should_show_text;
+	redraw();
+}
+
+void GLWindow::interactive_change_2d()
+{
+	is_2d = !is_2d;
+	resetCamera();
+	redraw();
 }
 
 void GLWindow::mouseDown(int x, int y) {
@@ -240,13 +261,25 @@ void GLWindow::scrollWheel(int x, int y, int delta_x, int delta_y) {
 	} else 
 #endif
 	{
-		float wheelDelta = delta_x - delta_y;
-		if (wheelDelta) {
-			GLfloat deltaZ = wheelDelta * -camera.aperture / 200.0f;
-			camera.viewPos.z -= deltaZ;
-			if(camera.viewPos.z == 0.f)
-				camera.viewPos.z = .001f;
-			updateProjection();
+		if (!is_2d)
+		{
+			float wheelDelta = delta_x - delta_y;
+			if (wheelDelta) {
+				GLfloat deltaZ = wheelDelta * -camera.aperture / 200.0f;
+				camera.viewPos.z -= deltaZ;
+				if (camera.viewPos.z == 0.f)
+					camera.viewPos.z = .001f;
+				updateProjection();
+				redraw();
+			}
+		}
+		else
+		{
+			if (delta_x < delta_y)
+				camera.viewPos.z *= 0.9;
+			else
+				camera.viewPos.z *= 1.1;
+
 			redraw();
 		}
 	}
@@ -264,7 +297,10 @@ int GLWindow::handle(int event) {
 		case FL_PUSH:
 			switch(Fl::event_button()) {
 				case FL_LEFT_MOUSE:
-					mouseDown(x,y);
+					if (is_2d)
+						rightMouseDown(x, y);
+					else
+						mouseDown(x,y);
 					break;
 				case FL_RIGHT_MOUSE:
 					rightMouseDown(x,y);
@@ -299,31 +335,41 @@ void GLWindow::prepareOpenGL(int width, int height) {
 
 void GLWindow::draw_command(ClientState & state, const char * buf) {
     float data[9];
+	char* rem = NULL;
     Frame_setColor(frame,state.colors);
     switch(buf[0]) {
         case 'p':
-			if(readFloats(3, buf+1, data)) {
+			if(readFloats(3, buf+1, data, &rem)) {
 				Frame_addPoint(frame, data);
 			}
 			break;
 		case 't':
-			if(readFloats(9, buf+1, data)) {
+			if(readFloats(9, buf+1, data, &rem)) {
 				Frame_addTriangle(frame, data);
 			}
 			break;
 		case 'c':
-			if(readFloats(3, buf+1, data)) {
+			if(readFloats(3, buf+1, data, &rem)) {
 				memcpy(&state.colors[0],data,sizeof(Color));
 			}
 			break;
 		case 'l':
-			if(readFloats(6, buf+1, data)) {
+			if(readFloats(6, buf+1, data, &rem)) {
 				Frame_addLine(frame, data);
 			}
 			break;
 		case 'n':
-			if(readFloats(6, buf+1, data)) {
+			if(readFloats(6, buf+1, data, &rem)) {
 				Frame_addNormal(frame, data);
+			}
+			break;
+		case 'x':
+			{				
+				if (readFloats(6, buf + 1, data, &rem)) {
+					std::string ss = rem;
+					DisplayText disp_text = { data[0], data[1], data[2], data[3], data[4], data[5], ss };
+					display_texts.push_back(disp_text);
+				}
 			}
 			break;
 		case 's': {
@@ -338,7 +384,7 @@ void GLWindow::draw_command(ClientState & state, const char * buf) {
 			}
 		} break;
 		case 'g': {
-			if(readFloats(1,buf+1,data)) {
+			if(readFloats(1,buf+1,data, &rem)) {
 				unsigned int key = data[0];
 				if(state.client_key_to_string.count(key)) {
 					int string = state.client_key_to_string[key];
@@ -433,7 +479,21 @@ void GLWindow::draw() {
 	glScalef(scale, scale, scale);
 	glTranslatef(-center[0],-center[1],-center[2]);
 	Frame_draw(frame, &current_bounds, point_size, color_by);
-	
+
+	if (should_show_text)
+	{
+		glDisable(GL_DEPTH_TEST);
+		gl_font(1, font_size);		
+		for (int i = 0; i < display_texts.size(); i++)
+		{
+			DisplayText& text = display_texts[i];
+			glRasterPos3f(text.t_x, text.t_y, text.t_z);
+			glColor3f(text.t_r, text.t_g, text.t_b);
+			gl_draw(text.t_data.c_str(), text.t_data.size());
+		}
+		glEnable(GL_DEPTH_TEST);
+	}
+
 	GLenum err = glGetError();
 	if(GL_NO_ERROR != err) {
 		fprintf(stderr,"gl: %s\n", gluErrorString(err));

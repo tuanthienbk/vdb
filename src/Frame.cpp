@@ -7,6 +7,7 @@
  *
  */
 #define NOMINMAX
+#include <windows.h>
 #include "Frame.h"
 #include <vector>
 #include <FL/gl.h>
@@ -16,7 +17,7 @@
 #include <math.h>
 #include <string.h>
 #include <limits.h>
-
+#include <algorithm>
 #ifdef _WIN32
 #pragma comment(lib,"opengl32.lib")
 #pragma comment(lib,"glu32.lib")

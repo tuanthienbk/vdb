@@ -10,6 +10,12 @@ static void slider_changed_wrapper(Fl_Widget *, void * win) {
 static void clear_wrapper(Fl_Widget *, void * win) {
     ((GLWindow*) win)->interactive_clear();
 }
+static void show_text_wrapper(Fl_Widget *, void * win) {
+	((GLWindow*)win)->interactive_show_text();
+}
+static void is_2d_wrapper(Fl_Widget *, void * win) {
+	((GLWindow*)win)->interactive_change_2d();
+}
 static void color_by_wrapper(Fl_Widget *, void * win) {
 	VDBWindow * w = (VDBWindow*)win;
 	w->gl->set_color_by(w->color_by->value());
@@ -32,6 +38,7 @@ static void setupSlider(Fl_Slider * s, double low, double high, double value, vo
 void VDBWindow::slider_changed() {
 	gl->point_size = point_size->value();
 	gl->filter_value = filter_value->value();
+	gl->font_size = int(font_size->value());
 	gl->redraw();
 }
 
@@ -41,11 +48,13 @@ VDBWindow::VDBWindow() : Fl_Window(640+180,480,"vdb") {
 	Fl_Group * group = new Fl_Group(640,0,180,h());
 	
 	point_size = new Fl_Slider(640+10, 20, 160, 20, "Point Size");
-	setupSlider(point_size,1,5,5,this);
-	filter_value = new Fl_Slider(640+10, 60, 160 , 20, "Filter");
+	setupSlider(point_size, 1, 5, 5, this);
+	font_size = new Fl_Slider(640 + 10, 60, 160, 20, "Font Size");
+	setupSlider(font_size, 5, 18, 10, this);
+	filter_value = new Fl_Slider(640+10, 100, 160 , 20, "Filter");
 	setupSlider(filter_value,0,1,1,this);
 	
-	color_by = new Fl_Choice(640+30, 100, 110, 20, "Color By");
+	color_by = new Fl_Choice(640+30, 140, 110, 20, "Color By");
 	color_by->align(FL_ALIGN_TOP);
 	color_by->add("vdb_color",0,color_by_wrapper,this);
 	color_by->add("vdb_label",0,color_by_wrapper,this);
@@ -55,7 +64,17 @@ VDBWindow::VDBWindow() : Fl_Window(640+180,480,"vdb") {
 	clear_button = new Fl_Button(640+130, h() - 40, 40, 30, "Clear");
 	clear_button->callback(clear_wrapper,gl);
 	makePretty(clear_button);
+
+	show_text_button = new Fl_Check_Button(640 + 30, h() - 40, 40, 30, "Show Text");
+	show_text_button->set();
+	show_text_button->callback(show_text_wrapper, gl);
+	makePretty(show_text_button);
 	
+	is_2d_button = new Fl_Check_Button(640 + 30, h() - 80, 40, 30, "2D Graphics");
+	is_2d_button->set();
+	is_2d_button->callback(is_2d_wrapper, gl);
+	makePretty(is_2d_button);
+
 	makePretty(this);
 	for(int i = 0; i < N_CATEGORY_COLORS; i++) {
 		Fl::set_color(i+8,category_colors[i][0],category_colors[i][1],category_colors[i][2]);

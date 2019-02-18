@@ -12,7 +12,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
-#define snprintf sprintf_s
+//#define snprintf sprintf_s
 #define STRDUP _strdup
 
 #endif
@@ -173,8 +173,12 @@ VDB_CALL int vdb_frame() {
 	return vdb_flush();
 }
 
+VDB_CALL int vdb_text(float x, float y, float z, const char* txt) {
+	return vdb_printf("x %f %f %f %s\n",x,y,z,txt);
+}
+
 VDB_CALL int vdb_color(float r, float g, float b) {
-	return vdb_printf("c %f %f %f\n",r,g,b);
+	return vdb_printf("c %f %f %f\n", r, g, b);
 }
 
 VDB_CALL int vdb_intern(const char * str) {

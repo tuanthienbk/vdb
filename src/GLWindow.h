@@ -1,6 +1,8 @@
 #ifndef _GL_WINDOW_H
 #define _GL_WINDOW_H
 
+#include <windows.h>
+
 #include <FL/Fl.H>
 #include <FL/Fl_Gl_Window.H>
 #include <FL/Fl_Window.H>
@@ -45,13 +47,25 @@ enum ColorBy {
     CB_SIZE
 };
 
+struct DisplayText
+{
+	float t_x, t_y, t_z; // x-y-z position
+	float t_r, t_g, t_b; // red-green-blue
+	std::string t_data; // text to be displayed
+};
+
 struct GLWindow : public Fl_Gl_Window {
-    double point_size;                       
-    double filter_value;                     
+    double point_size;
+	int font_size;
+    double filter_value;
+	bool should_show_text;
+	bool is_2d;
     void draw();
     void resize(int X,int Y,int W,int H);
     
     void interactive_clear();
+	void interactive_show_text();
+	void interactive_change_2d();
     int handle(int event);
     void updateProjection();
     void updateModelView();
@@ -87,6 +101,7 @@ struct GLWindow : public Fl_Gl_Window {
 	LabelTable label_table;
 	Fl_Browser * legend;
 	ColorBy legend_color_by;
+	std::vector<DisplayText> display_texts;
 };
 
 #endif
